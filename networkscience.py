@@ -5,6 +5,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sns
+from scipy import sparse
 from scipy import stats
 
 def display_top_n(df, n, label):
@@ -42,9 +43,9 @@ def plot_probability_loglog(ax, x, y, title, cumulative=False):
     ax.set_title(title, size = 22)
     ax.set_xlabel("k", size = 20)
     if cumulative:
-        ax.set_ylabel("p_k", size = 20)
-    else:
         ax.set_ylabel("P_k", size = 20)
+    else:
+        ax.set_ylabel("p_k", size = 20)
     ax.tick_params(labelsize=18)
     ax.tick_params(labelsize=18)
 
@@ -121,6 +122,64 @@ def degree_disribution(adj, nodes, print_graph=False):
     
     return df
     #hh, aa = nx.algorithms.link_analysis.hits_alg.hits(nx.DiGraph(adj_matrix_crs.T), tol = 1e-4/len(nx.DiGraph(adj_matrix_crs.T)))
+
+def find_components(adj, nodes):
+    """Divide nodes depending on the component they belong
+
+    Args:
+        adj (sparse matrix): the adjacency matrix of the network
+        nodes (DataFrame): a DataFrame containing the nodes, the 
+            order in the serie must be the same of the adjacency matrix one.
+    Returns:
+        a DataFrame containing nodes and their component
+    """
+    n = nodes.copy()
+    out = sparse.csgraph.connected_components(adj)
+    n['component'] = out[1]
+    return n
+
+def keep_giant(node_component, whole_df):
+    """Create a new adjacency matrix and a edge dataframe with only nodes of the giant component
+
+    Args:
+        node_component (DataFrame): dataframe containing node and component, as output of find_components
+        whole_df (DataFrame): a DataFrame containing the edges of the whole graph.
+    Returns:
+        the adjacency matrix of the giant component and two DataFrame containing edges and nodes of the giant component
+    """
+    unique, counts = np.unique(node_component['component'], return_counts=True)
+    unique_df = pd.DataFrame({'u': unique, 'counts':counts})
+    giant = unique_df['counts'].argmax()
+    
+    mask = node_component['component'] != giant
+    
+    node_component.loc[mask, 'component'] = np.nan
+    giant_edges = whole_df.copy()
+    giant_edges.rename({'Sending Organization': 'source','Receiving Organization': 'target'},axis=1, inplace=True)
+    node_component.rename({'Nodes': 'source'},axis=1, inplace=True)
+    giant_edges = pd.merge(giant_edges, node_component, on="source")
+    node_component.rename({'source': 'target', 'component':'comp'},axis=1, inplace=True)
+    giant_edges = pd.merge(giant_edges, node_component, on="target")
+    giant_edges.dropna(inplace=True)
+    
+    giant_nodes = (node_component.dropna()).copy()
+    giant_nodes.rename({'target': 'Nodes'},axis=1, inplace=True)
+    giant_nodes['NodeID'] = np.arange(len(giant_nodes.index))
+    giant_nodes.drop('comp', axis=1, inplace=True)
+    giant_nodes.reset_index(drop=True, inplace=True)
+
+    giant_edges =giant_edges[['source', 'target', 'Participants']].copy()
+    giant_nodes.rename({'Nodes': 'source', 'NodeID':'sourceID'},axis=1, inplace=True)
+    giant_edges = pd.merge(giant_edges, giant_nodes, on="source")
+    giant_nodes.rename({'source': 'target', 'sourceID':'targetID'},axis=1, inplace=True)
+    giant_edges = pd.merge(giant_edges, giant_nodes, on="target")
+    giant_nodes.rename({'target': 'Nodes', 'targetID':'NodeID'},axis=1, inplace=True)
+    giant_serie = giant_edges.groupby(['sourceID', 'targetID']).sum()
+    row = np.array(giant_serie.index.get_level_values(1).tolist())
+    col = np.array(giant_serie.index.get_level_values(0).tolist())
+    val = giant_serie.values
+    new_adj = sparse.csr_matrix((val.flatten(), (row, col)), shape=(len(giant_nodes.index), len(giant_nodes.index)))
+    return new_adj, giant_edges, giant_nodes
 
 def hits_alg(adj, nodes, score_df=None, print_graph=False):
     """Calculate hits scores for hub and authorities
