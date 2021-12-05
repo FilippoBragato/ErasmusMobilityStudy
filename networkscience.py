@@ -143,7 +143,7 @@ def keep_giant(node_component, whole_df):
 
     Args:
         node_component (DataFrame): dataframe containing node and component, as output of find_components
-        whole_df (DataFrame): a DataFrame containing the edges of the whole graph.
+        whole_df (DataFrame): a DataFrame containing the edges of the whole graph. Columns must be: 'source', 'target' and 'weight'
     Returns:
         the adjacency matrix of the giant component and two DataFrame containing edges and nodes of the giant component
     """
@@ -155,7 +155,6 @@ def keep_giant(node_component, whole_df):
     
     node_component.loc[mask, 'component'] = np.nan
     giant_edges = whole_df.copy()
-    giant_edges.rename({'Sending Organization': 'source','Receiving Organization': 'target'},axis=1, inplace=True)
     node_component.rename({'Nodes': 'source'},axis=1, inplace=True)
     giant_edges = pd.merge(giant_edges, node_component, on="source")
     node_component.rename({'source': 'target', 'component':'comp'},axis=1, inplace=True)
@@ -168,7 +167,7 @@ def keep_giant(node_component, whole_df):
     giant_nodes.drop('comp', axis=1, inplace=True)
     giant_nodes.reset_index(drop=True, inplace=True)
 
-    giant_edges =giant_edges[['source', 'target', 'Participants']].copy()
+    giant_edges =giant_edges[['source', 'target', 'weight']].copy()
     giant_nodes.rename({'Nodes': 'source', 'NodeID':'sourceID'},axis=1, inplace=True)
     giant_edges = pd.merge(giant_edges, giant_nodes, on="source")
     giant_nodes.rename({'source': 'target', 'sourceID':'targetID'},axis=1, inplace=True)
