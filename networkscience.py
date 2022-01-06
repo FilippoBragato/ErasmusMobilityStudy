@@ -138,6 +138,14 @@ def find_components(adj, nodes):
     n['component'] = out[1]
     return n
 
+def fraction_in_giant(adj):
+    """Tanto per curiosità, mi vedi?"""
+    out = sparse.csgraph.connected_components(adj)
+    unique, counts = np.unique(out[1], return_counts=True)
+    unique_df = pd.DataFrame({'u': unique, 'counts':counts})
+    giant_size = unique_df['counts'].max()
+    return giant_size/np.sum(unique_df['counts'])
+
 def keep_giant(node_component, whole_df):
     """Create a new adjacency matrix and a edge dataframe with only nodes of the giant component
 
